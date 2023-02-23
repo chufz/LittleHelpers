@@ -1,6 +1,6 @@
 ## RTadjuster
 
-This is a shiny app for scrolling through EIC of a list of m/z values (e.g. a suspect screening or target screening list) to control the peak shapes and also to adjust the retention time (RT) values in the list.
+This is a shiny app for scrolling through EICs of a list of m/z values (e.g. a suspect screening or target screening list) to control the peak shapes and also to adjust the retention time (RT) values in the list.
 For simplification and easy handling, the code is kept as simple and short as possible.
 
 ## Installation
@@ -16,6 +16,9 @@ install.packages(shinyjs)
 install.packages(data.table)
 install.packages(DT)
 ```
+
+The Skript can be downloaded either via the command `git pull git@github.com:chufz/LittleHelpers.git` or as zip file over the link https://github.com/chufz/LittleHelpers/archive/refs/heads/main.zip
+
 
 ## Usage
 
