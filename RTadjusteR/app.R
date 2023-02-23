@@ -179,7 +179,7 @@ server <- function(input, output) {
         },
         content = function(file) {
             # save depending on the name given from the commandline input
-            save.csv(q$table, file)
+            write.csv(q$table, file)
             message("New csv file with updated RT has beeen stored.")
         }
     )
