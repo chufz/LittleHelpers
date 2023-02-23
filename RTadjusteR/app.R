@@ -28,7 +28,9 @@ plotly_chrom <- function(data, mass, ppm, rt=NULL){
         })
         EIC_list <- unique(rbindlist(EIC_list))
         if(length(rt)==0){
-            fig <- plot_ly(EIC_list, x = ~rt, y = ~int, type = 'scatter', mode = 'lines', source = "A")
+            fig <- plot_ly(EIC_list, x = ~rt, y = ~int, type = 'scatter', mode = 'lines', source = "A")%>% 
+                add_lines(x = rt, line = list(color= "grey", widthh=0.5, dash="dot"), showlegend = FALSE)%>%
+                event_register("plotly_doubleclick")
         }else{
             fig <- plot_ly(EIC_list, x = ~rt, y = ~int, type = 'scatter', mode = 'lines', source = "A")%>% 
                 add_lines(x = rt, line = list(color= "grey", widthh=0.5, dash="dot"), showlegend = FALSE)%>%
