@@ -61,7 +61,7 @@ ui <-   navbarPage(title="EIC",
                 ),
                 br(), br(),
                 p(strong("1. Select MZML directory:")),
-                shinyDirButton('newfiles', label='choose', title='Chose the MZML directory that appear in the list', viewtype = "detail"),
+                shinyDirButton('newfiles', label='choose', title='Chose the MZML directory that appears in the list', viewtype = "detail"),
                 br(), br(),
                 selectInput('filelist', '2. Select Samples:', file_selection, multiple=TRUE, selectize=FALSE, size=15),
                 actionButton(
