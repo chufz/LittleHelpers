@@ -70,6 +70,13 @@ ui <-   navbarPage(title="EIC",
                     inputId = "selectall", label = "select all",
                     style = "padding:12px; font-size:70%"
                 ),
+                br(), br(),
+                textInput("pattern", label="Select by pattern:", value = "", width = NULL, placeholder = ""),
+                actionButton(
+                    inputId = "pattern_button", label = "select pattern",
+                    style = "padding:12px; font-size:70%"
+                ),
+                br(), br(),
                 actionButton(
                     inputId = "load", label = strong("3. Load data"),
                     style = "padding:12px; font-size:70%"
@@ -143,6 +150,11 @@ server <- function(input, output) {
     # if select all
     observeEvent(input$selectall,{
     q$file <- list.files(path = q$filepath, pattern=".mzML$", full.names = TRUE)
+    updateSelectInput(inputId="filelist", selected=basename(q$file))
+    })
+    # if a pattern is added
+    observeEvent(input$pattern_button,{
+    q$file <- list.files(path = q$filepath, pattern=".mzML$", full.names = TRUE)[grep(input$pattern, list.files(path = q$filepath, pattern=".mzML$", full.names = TRUE))]
     updateSelectInput(inputId="filelist", selected=basename(q$file))
     })
     # if csv file uploaded
