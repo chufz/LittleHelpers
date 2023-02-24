@@ -7,14 +7,14 @@ For simplification and easy handling, the code is kept as simple and short as po
 Before first use, these following packages should be installed:
 
 ```{R}
-install.packages(shiny)
-install.packages(shinyWidgets)
-install.packages(plotly)
-install.packages(RaMS)
-install.packages(shinyFiles)
-install.packages(shinyjs)
-install.packages(data.table)
-install.packages(DT)
+install.packages("shiny")
+install.packages("shinyWidgets")
+install.packages("plotly")
+install.packages("RaMS")
+install.packages("shinyFiles")
+install.packages("shinyjs")
+install.packages("data.table")
+install.packages("DT")
 ```
 
 The Skript can be downloaded either via the command `git pull git@github.com:chufz/LittleHelpers.git` or as zip file over the link https://github.com/chufz/LittleHelpers/archive/refs/heads/main.zip
