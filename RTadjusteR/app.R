@@ -28,9 +28,7 @@ plotly_chrom <- function(data, mass, ppm, rt=NULL){
         })
         EIC_list <- unique(rbindlist(EIC_list))
         if(length(rt)==0){
-            fig <- plot_ly(EIC_list, x = ~rt, y = ~int, type = 'scatter', mode = 'lines', source = "A")%>% 
-                add_lines(x = rt, line = list(color= "grey", widthh=0.5, dash="dot"), showlegend = FALSE)%>%
-                event_register("plotly_doubleclick")
+            fig <- plot_ly(EIC_list, x = ~rt, y = ~int, type = 'scatter', mode = 'lines', source = "A")
         }else{
             fig <- plot_ly(EIC_list, x = ~rt, y = ~int, type = 'scatter', mode = 'lines', source = "A")%>% 
                 add_lines(x = rt, line = list(color= "grey", widthh=0.5, dash="dot"), showlegend = FALSE)%>%
@@ -173,8 +171,12 @@ server <- function(input, output) {
     })
     # if clicked on value in table
     observeEvent(input$dynamic_rows_selected, {
-        q$mz <- as.numeric(q$table[input$dynamic_rows_selected,as.numeric(q$mzcol)])
-        q$rt <- as.numeric(q$table[input$dynamic_rows_selected,as.numeric(q$rtcol)])
+        if(!is.na(as.numeric(q$table[input$dynamic_rows_selected,as.numeric(q$mzcol)]))){
+            q$mz <- as.numeric(q$table[input$dynamic_rows_selected,as.numeric(q$mzcol)])
+        }
+        if(!is.na(as.numeric(q$table[input$dynamic_rows_selected,as.numeric(q$rtcol)]))){
+            q$rt <- as.numeric(q$table[input$dynamic_rows_selected,as.numeric(q$rtcol)])
+        }
         output$chrom <-  renderPlotly(plotly_chrom(data=q$data, mass=q$mz, ppm=q$ppm, rt=q$rt))
     })
     # Get Rt in panel
