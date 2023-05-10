@@ -180,13 +180,14 @@ server <- function(input, output) {
         output$chrom <-  renderPlotly(plotly_chrom(data=q$data, mass=q$mz, ppm=q$ppm, rt=q$rt))
     })
     # Get Rt in panel
-    output$selection <- renderPrint({ if(q$rt==0){"Select RT value"}else{paste("RT=", q$rt, "min")} })
+    output$selection <- renderPrint({ if(q$rt==0){"Select RT value"}else{paste("RT=", round(q$rt,4), "min")} })
     # if double click on graph, get rt value
     p1 <- reactive({event_data("plotly_click", source = "A")})
     observeEvent(p1(),{ 
         q$rt <- as.list(p1())$x
         #new table
         q$table[input$dynamic_rows_selected,as.numeric(q$rtcol)] <- round(q$rt,2)
+        #output$dynamic <- renderDataTable({})
         })
     # Store Result for uploaded files
     output$d_store <- downloadHandler(
@@ -195,7 +196,7 @@ server <- function(input, output) {
         },
         content = function(file) {
             # save depending on the name given from the commandline input
-            write.csv(q$table, file)
+            write.csv(q$table, file, row.names=FALSE)
             message("New csv file with updated RT has beeen stored.")
         }
     )
