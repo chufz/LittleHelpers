@@ -6,6 +6,7 @@ library(shinyFiles)
 library(shinyjs)
 library(data.table)
 library(DT)
+library(readr)
 #######################################################################
 #starter values
 file_selection <- ""
@@ -157,7 +158,7 @@ server <- function(input, output) {
     })
     # if csv file uploaded
     observeEvent(input$csvfile,{
-    q$table <- read.csv(input$csvfile$datapath)
+    q$table <- readr::read_csv(input$csvfile$datapath)
     output$dynamic <- renderDT(DT::datatable(q$table,
                                              selection = "single"),server = TRUE)
     })
@@ -196,7 +197,7 @@ server <- function(input, output) {
         },
         content = function(file) {
             # save depending on the name given from the commandline input
-            write.csv(q$table, file, row.names=FALSE)
+            readr::write_csv(q$table, file)
             message("New csv file with updated RT has beeen stored.")
         }
     )
