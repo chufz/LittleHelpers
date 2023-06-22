@@ -6,6 +6,7 @@ library(shinyFiles)
 library(shinyjs)
 library(data.table)
 library(DT)
+library(fs)
 library(readr)
 #######################################################################
 #starter values
@@ -158,7 +159,10 @@ server <- function(input, output) {
     })
     # if csv file uploaded
     observeEvent(input$csvfile,{
-    q$table <- readr::read_csv(input$csvfile$datapath)
+    q$table <- read_csv(input$csvfile$datapath)
+    # preserve the column names
+    q$column_names <- colnames(q$table)
+    # render interactive table
     output$dynamic <- renderDT(DT::datatable(q$table,
                                              selection = "single"),server = TRUE)
     
