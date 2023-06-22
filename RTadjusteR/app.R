@@ -162,6 +162,11 @@ server <- function(input, output) {
     output$dynamic <- renderDT(DT::datatable(q$table,
                                              selection = "single"),server = TRUE)
     })
+    
+    # preserve the column names
+    
+    q$column_names <- colnames(q$table)
+    
     # if mz col value is changed
     observeEvent(input$mzcol,{
         q$mzcol <- input$mzcol
@@ -196,6 +201,9 @@ server <- function(input, output) {
             paste0("new_RT.csv")
         },
         content = function(file) {
+            # replace the column names by the preserved
+            colnames(q$table) <- q$column_names
+            
             # save depending on the name given from the commandline input
             readr::write_csv(q$table, file)
             message("New csv file with updated RT has beeen stored.")
