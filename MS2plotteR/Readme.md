@@ -10,7 +10,6 @@ Before first use, these following packages should be installed:
 install.packages("shiny")
 install.packages("plotly")
 install.packages("scales")
-install.packages("shinyjs")
 ```
 
 The Skript can be downloaded either via the command `git pull git@github.com:chufz/LittleHelpers.git` or as zip file over the link https://github.com/chufz/LittleHelpers/archive/refs/heads/main.zip
