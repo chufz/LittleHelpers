@@ -1,87 +1,53 @@
 library(shiny)
 library(plotly)
 library(scales)
+library(MsCoreUtils)
 #######################################################################
 #' Function for generating a plotly headtail plot for one query in mtch object
-plotly_headtail <- function(top, bottom){
-    # get relative intensities
-    top$V2 <- rescale(top$V2, to=c(0,100))
-    bottom$V2  <- rescale(bottom$V2, to=c(0,100))
-    # create layout
-    layout <- list(
-        title = "",
-        xaxis = list(title = "m/z",
-                     zeroline=TRUE,
-                     range=c(0, max(top$V1)),
-                     nticks=8,
-                     autorange = TRUE),
-        yaxis = list(title = "Signal Intensity [%]",
-                     zeroline=TRUE,
-                     tickmode='array',
-                     tickvals=c(-100, -50, 0, 50, 100),
-                     ticktext=c('100','50', '0', '50', '100'))
-    )
+plotly_headtail <- function(x_peaks, y_peaks, xLabel = "query", xColor = "#E41A1C",
+                                 yLabel = "target", yColor =  "#377EB8", matchSize = 5,
+                                 ppm = 20, tolerance = 0) {
+    x_peaks$intensity <- rescale(x_peaks$intensity, to=c(0,100))
+    y_peaks$intensity  <- rescale(y_peaks$intensity, to=c(0,100))
+    p <- plotly::plot_ly()
+    x_range <- range(x_peaks$mz, y_peaks$mz, na.rm = TRUE) + c(-1, 1)
+    y_max <- max(x_peaks$intensity, y_peaks$intensity, na.rm = TRUE)
+    y_peaks$intensity <- -y_peaks$intensity
     
-    # create plot
-    p <- plot_ly(
-        top,
-        x =  ~ V1,
-        y =  ~ V2,
-        showlegend = F,
-        type = 'bar',
-        marker = list(size = 3, color = 'red'),
-        hoverinfo = 'none'
-    )
-    
-    p <- add_markers(
-            p,
-            type = "scatter",
-            x = top$V1,
-            y = top$V2,
-            hovertemplate = paste('<br>mz:', '%{x}', '<br>int: %{y}<br>'),
-            hoverlabel = list(namelength = 0)
-        )
-
-    p <- add_trace(
-                p,
-                type = "bar",
-                x = bottom$V1,
-                y = -bottom$V2,
-                marker = list(color = 'blue'),
-                hoverinfo = 'none'
-            )
-        
-    p <- add_markers(
-                p,
-                x = bottom$V1,
-                y = -bottom$V2,
-                type = 'scatter',
-                marker = list(color = 'blue'),
-                hovertemplate = paste('<br>mz:', '%{x}', '<br>int: %{y}<br>'),
-                hoverlabel = list(namelength = 0)
-            )
-    
-    p <- layout(
-            p,
-            title = layout$title,
-            xaxis = layout$xaxis,
-            yaxis = layout$yaxis
-        )
-    
-    p <- add_annotations(
-            p,
-            type = 'text',
-            x = c(15, 15),
-            y = c(100, -100),
-            text = c("", ""),
-            textfont = list(color = c('red', 'blue')),
-            showarrow = F
-        )
-    
-    p <- p %>% layout(hovermode = "x", hoverdistance = 1)
-    
-    # return plot
-    p
+    ht <- "<b>%{text}</b><br>mz: %{x}<br>int: %{y}"
+    if (nrow(x_peaks)) {
+        x_peaks$zero <- 0.0
+        x_peaks$match <- ""
+        x_peaks$color <- xColor[1L]
+        idx <- which(common(x_peaks$mz, y_peaks$mz, tolerance, ppm))
+        if (length(idx))
+            x_peaks$match[idx] <- "matched"
+        p <- add_segments(p, data = x_peaks, x = ~mz, y = ~zero, xend = ~mz,
+                     yend = ~intensity, line = list(color = xColor[1L]),
+                     name = xLabel, hovertemplate = ht)
+    }
+    if (nrow(y_peaks)) {
+        y_peaks$zero <- 0.0
+        y_peaks$match <- ""
+        y_peaks$color <- yColor[1L]
+        idx <- which(common(y_peaks$mz, x_peaks$mz, tolerance, ppm))
+        if (length(idx))
+            y_peaks$match[idx] <- "matched"
+        p <- add_segments(p, data = y_peaks, x = ~mz, y = ~zero, xend = ~mz,
+                     yend = ~intensity, line = list(color = yColor[1L]),
+                     name = yLabel, hovertemplate = ht)
+    }
+    pks <- rbind(x_peaks, y_peaks)
+    pks <- pks[pks$match != "", , drop = FALSE]
+    if (nrow(pks))
+        p <- plotly::add_trace(p, data = pks, x = ~mz, y = ~intensity,
+                               type = "scatter", mode = "markers",
+                               hoverinfo = "none", name = "matched",
+                               marker = list(size = matchSize[1L],
+                                             color = ~color))
+    plotly::layout(p, xaxis = list(title = "m/z", zeroline = FALSE),
+                   yaxis = list(title = "intensity", zeroline = TRUE),
+                   hovermode = "x", hoverdistance = 1)
 }
 #######################################################################
 ui <- fluidPage(titlePanel(shiny::div("MS2plotteR")),
@@ -99,11 +65,11 @@ ui <- fluidPage(titlePanel(shiny::div("MS2plotteR")),
 server <- function(input, output, session) {
     
     observeEvent(input$b_plot,{
-        B1 <- read.table(text=input$box1, sep=" ")
-        B2 <- read.table(text=input$box2, sep=" ")
-
+        B1 <- read.table(text=input$box1, sep=" ", col.names=c("mz","intensity"))
+        B2 <- read.table(text=input$box2, sep=" ", col.names=c("mz","intensity"))
+        
         output$plot <- plotly::renderPlotly(
-            plotly_headtail(B1,B2))
+            plotly_headtail(B1,B2, ppm = 20, tolerance = 0))
     })
 }
 #######################################################################
