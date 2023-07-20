@@ -2,19 +2,22 @@ library(shiny)
 library(plotly)
 library(scales)
 library(MsCoreUtils)
+library(MetaboAnnotation)
+library(Spectra)
 #######################################################################
 #' Function for generating a plotly headtail plot for one query in mtch object
 plotly_headtail <- function(x_peaks, y_peaks, xLabel = "query", xColor = "#E41A1C",
                                  yLabel = "target", yColor =  "#377EB8", matchSize = 5,
                                  ppm = 20, tolerance = 0) {
+    
     x_peaks$intensity <- rescale(x_peaks$intensity, to=c(0,100))
     y_peaks$intensity  <- rescale(y_peaks$intensity, to=c(0,100))
     p <- plotly::plot_ly()
     x_range <- range(x_peaks$mz, y_peaks$mz, na.rm = TRUE) + c(-1, 1)
     y_max <- max(x_peaks$intensity, y_peaks$intensity, na.rm = TRUE)
     y_peaks$intensity <- -y_peaks$intensity
-    
     ht <- "<b>%{text}</b><br>mz: %{x}<br>int: %{y}"
+    
     if (nrow(x_peaks)) {
         x_peaks$zero <- 0.0
         x_peaks$match <- ""
@@ -56,10 +59,12 @@ ui <- fluidPage(titlePanel(shiny::div("MS2plotteR")),
                         textAreaInput("box1", "Upper Spectra", value = "", width = '100%', rows = 15, resize = "both"),
                         textAreaInput("box2", "Lower Spectra", value = "", width = '100%', rows = 15, resize = "both"),
                         radioButtons("format","Lower Spectra format:", choices = c("Text"="a", "MassBank"="b")),
+                        textAreaInput("ppm", "ppm:", value = "20", width = "10%", rows = 1),
                         actionButton("b_plot", "Plot")
                      ),
                     mainPanel(
-                        plotlyOutput("plot")
+                        plotlyOutput("plot"),
+                        verbatimTextOutput("scores", placeholder = FALSE)
                     ))
                 )
                      
@@ -75,8 +80,20 @@ server <- function(input, output, session) {
             colnames(B2) <- c("mz","intensity")
         }
         
+        spd <- DataFrame(msLevel = c(2L, 2L))
+        spd$mz <- list(B1$mz, B2$mz)
+        spd$intensity <- list(B1$intensity, B2$intensity)
+        sps <- Spectra(spd)
+        m <- matchSpectra(sps[1], sps[2], param=MatchForwardReverseParam(ppm=as.numeric(input$ppm), requirePrecursor = F, THRESHFUN = function(x)which(x>0.001)))
+        
+        output$scores <- renderText({paste(" Dot product: ", round(m@matches$score,4), "\n",
+                                           "Reverse dot product: ", round(m@matches$reverse_score,4), "\n",
+                                           "Presence ratio: ", round(m@matches$presence_ratio,4),"\n",
+                                           "Matched peaks: ", round(m@matches$matched_peaks_count,4)
+                                           )})
+            
         output$plot <- plotly::renderPlotly(
-            plotly_headtail(B1,B2, ppm = 20, tolerance = 0))
+            plotly_headtail(B1,B2, ppm = as.numeric(input$ppm), tolerance = 0))
     })
 }
 #######################################################################
