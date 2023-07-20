@@ -55,6 +55,7 @@ ui <- fluidPage(titlePanel(shiny::div("MS2plotteR")),
                     sidebarPanel(
                         textAreaInput("box1", "Upper Spectra", value = "", width = '100%', rows = 15, resize = "both"),
                         textAreaInput("box2", "Lower Spectra", value = "", width = '100%', rows = 15, resize = "both"),
+                        radioButtons("format","Lower Spectra format:", choices = c("Text"="a", "MassBank"="b")),
                         actionButton("b_plot", "Plot")
                      ),
                     mainPanel(
@@ -63,10 +64,16 @@ ui <- fluidPage(titlePanel(shiny::div("MS2plotteR")),
                 )
                      
 server <- function(input, output, session) {
-    
+
     observeEvent(input$b_plot,{
         B1 <- read.table(text=input$box1, sep=" ", col.names=c("mz","intensity"))
-        B2 <- read.table(text=input$box2, sep=" ", col.names=c("mz","intensity"))
+        if(input$format == "a"){
+            B2 <- read.table(text=input$box2, sep=" ", col.names=c("mz","intensity"))
+        }
+        if(input$format == "b"){
+            B2 <- read.table(text=input$box2, sep=" ")[,3:4]
+            colnames(B2) <- c("mz","intensity")
+        }
         
         output$plot <- plotly::renderPlotly(
             plotly_headtail(B1,B2, ppm = 20, tolerance = 0))
