@@ -1,0 +1,469 @@
+---
+title: "Reannotate MzMine an Output with MetaboAnnotation and perform quality checks"
+author: "Carolin Huber"
+date: "2023-11-23"
+output: html_document
+---
+
+This is an RMarkdown file, that can be used for a non-targeted feature table of a project ion one ion mode. It is crafted for Mzmine outputs, but might be adapted for other software that output an nontarget feature table. For testing, an example input file for the feature table and the suspect list can be found in the ´test´ folder. In our case, spectral library annotation was performed in Mzmine, and the results are stored in a column named `spectral_db_matches.compound_name`.
+
+Following steps are performed:
+
+ - Annotation of the Mzmine feature list
+ - Inspection and cleanup of duplicate annotations
+ - Check of MS2 annotation performed by the spectral library annotation
+ - Isotope pattern annotation (for now, only M+H+ and M-H- annotations are supported)
+ - Additional annoation of glucuronides
+ - Blank correction
+ 
+ Remove the parts of this skript, which you do not want to perform.
+
+# Requiremnts and installations
+
+Following packages need to be loaded:
+
+```{r, include=FALSE, echo=FALSE}
+library(tidyverse)
+library(data.table)
+library(readr)
+library(MetaboAnnotation)
+library(knitr)
+library(kableExtra)
+# for isotope pattern analysis
+library(isopat)
+library(MetaboCoreUtils)
+```
+
+# Definition of input and output directories and filenames
+
+Here, we define the input files and output directories, please change for your project:
+
+```{r}
+# inputfiles
+peaklist_mzmine <- "test/peaklist_mzmine.csv"
+suspect_list <- "test/suspectlist.csv"
+# outputfiles
+height_output <- "test/output_height.csv"
+variable_output <- "test/output_variable.csv"
+```
+
+# Loading of the input
+
+Our Mzmine output contains metadata variables in the columns 1:45, while the feature information per sample continues in further columns. We perform our analysis on signal heights. If this is different to your input or preferences, change the following variables.
+
+```{r}
+no_metavariables <- 45 # number of columns in front with metadata
+abundance_pattern <- "mzML.height"
+#Annotation parameters
+ppm_tolerance <- 5 # mass tolerance used for annotation and isotope annotation
+rt_tolerance <- 0.2 # plus minus rt window in minutes and isotope annotation
+iso_threshold <- 0.05 # isotope threshold used for isotope annotation
+mode <- "neg" # pos or neg mode. Used for either calculating [M+H]+ or [M-H]- in the isotope pattern
+# blank removal parameters
+blank_removal_threshold <- 2 # how many times higher the mean samplevalue needs to be compared to the blank that the feature is keept for further analysis
+```
+
+# Feature table input wrangling
+
+```{r}
+mzmine <- fread(peaklist_mzmine)
+suspect <- data.frame(read_csv(suspect_list))
+# split variables
+mzmine_variablemetadata <- mzmine[,1:no_metavariables]
+# height table
+height <- colnames(mzmine)[grep(abundance_pattern, colnames(mzmine))]
+height_no <- as.character(grep(abundance_pattern, colnames(mzmine)))
+colnames(mzmine) <- as.character(1:ncol(mzmine))
+mzmine_height <- mzmine[,..height_no]
+colnames(mzmine_height) <- height
+rownames(mzmine_height) <- mzmine_variablemetadata$id
+```
+
+# Sample differentiation
+
+In our plotting options, samples can be differentiated by different colors. We use 3 different coloring options. The coloring will be performed based on a character pattern, that should be present in the samplenames (mzML filenames).
+
+```{r}
+calibrationpattern <- "Calibration"
+qcpattern <- "_spiked"
+blankpattern <- "Blank"
+
+samplepattern <- "_sample" # pattern that characterizes the samples in the dataset. It will be used to only report in the end annotations that are found in the samples
+```
+
+# Read in the Suspect List:
+
+```{r}
+suspect <- data.frame(read_csv(suspect_list))
+```
+
+# Perform Annotation:
+
+Here the MS1 feature annotation will be performed using the MetaboAnnotation package:
+
+```{r}
+param <- MzRtParam(ppm = ppm_tolerance, toleranceRt = rt_tolerance)
+pks_match <- matchValues(query=mzmine_variablemetadata,
+                     target=suspect, 
+                     param = param,
+                     mzColname = c("mz", "mz"),
+                     rtColname = c("rt", "rt"))
+pks_query <- pks_match[whichQuery(pks_match)]
+x <- data.frame(matchedData(pks_query))
+x$removed <- "NO"
+```
+
+# Show and handle duplicate annotations:
+
+The following table contains all duplicate annotations generated. Duplicate annotations occur due to inaccuracies in the feature peak picking or alignment errors. For alignment errors, you will see, that half of the features will have an abundance only in one of the two annotations. 
+
+```{r}
+dup <- x$target_name[which(duplicated(x$target_name))]
+dup_x <- x[which(x$target_name %in% dup),]
+list_dup <- data.frame(id=dup_x$id,
+                       name=dup_x$target_name, 
+                       measured_rt=dup_x$rt, 
+                       measured_mz=dup_x$mz, 
+                       library_match=dup_x$spectral_db_matches.compound_name,
+                       target_mz=dup_x$target_mz,
+                       target_rt=dup_x$target_rt)
+list_dup <- list_dup[order(list_dup$name),]
+kable(list_dup,  row.names=F) # table.attr = "style = \"color: white;\"",
+```
+
+Here, we can plot the abundance of one feature id against the other. For this, select the feature ids in the table above that you want to plot against each other.
+Choose ids that should be looked at how they correlate. This is a help to chose the correct annotation.
+In the plot, the calibration is marked in red, high level spiked in green and low level spiked in blue.
+
+```{r}
+sampletype <- rep("black", length=ncol(mzmine_height))
+sampletype[grep(calibrationpattern, colnames(mzmine_height))] <- "red"
+sampletype[grep(qcpattern, colnames(mzmine_height))] <- "green"
+sampletype[grep(blankpattern, colnames(mzmine_height))] <- "blue"
+```
+
+Change the feature_id_1 and feature_id_2 based on the table above:
+
+```{r}
+feature_id_1 <- "57302"
+feature_id_2 <- "60839"
+plot(as.vector(t(mzmine_height[feature_id_1,])) ~ as.vector(t(mzmine_height[feature_id_2,])), col=sampletype)
+```
+
+Based on the plotting results, you might have selected the feature annotations, you want to rely on and for which you want to remove the annotation. In the following chunk, enter the feature ids you want to remove:
+
+```{r}
+# ids of annotations to remove:
+wrong_ids <- c(41541,77911, 90413,20154, 77930, 60508, 65666, 57302)
+```
+
+Perform removal, the remaining list of previous annotations will be plotted:
+
+```{r}
+list_dup$name[which(list_dup$id %in% wrong_ids)] <- "removed"
+kable(list_dup,  row.names=F) #table.attr = "style = \"color: white;\"",
+# remove them from the matched table
+x$removed[which(x$id %in% wrong_ids)] <- "duplicated annotation"
+```
+
+In an additional case, we might reveal several annotations for the same feature id. 
+Look if several annotations are available for the same ID, select the correct annotation:
+
+```{r}
+dupID <- x$id[which(duplicated(x$id)& x$removed=="NO")]
+dupID_x <- x[which(x$id %in% dupID),]
+list_dupID <- data.frame(match_no=rownames(dupID_x),
+                         id=dupID_x$id,
+                       name=dupID_x$target_name, 
+                       measured_rt=dupID_x$rt, 
+                       measured_mz=dupID_x$mz, 
+                       library_match=dupID_x$spectral_db_matches.compound_name,
+                       target_mz=dupID_x$target_mz,
+                       target_rt=dupID_x$target_rt)
+list_dupID <- list_dupID[order(list_dupID$id),]
+kable(list_dupID) # , table.attr = "style = \"color: white;\""
+```
+
+The best annotation is chosen based on (1) if there is a spectral library match. If there is no MS2 annotation, the closest RT is chosen for each ID. Select here the matchnumber (rownames of the table above) of which annotations to remove:
+
+```{r}
+wrong_matchno <- c("37154")
+# remove them from the matched table
+x$removed[which(rownames(x) %in% wrong_matchno)] <- "several annotations for ID"
+```
+
+In the next step, we check, if the MS1 annotations equal the MS2 spectral library annotation. In the following table, the spectral library annotations and MS1 feature annotations are plotted against each other.
+Check for wrong Spectral library annotations:
+
+```{r}
+spec <- x[which(x$spectral_db_matches.compound_name !=""),]
+list_spec <- data.frame(match_no=rownames(spec),
+                       name=spec$target_name, 
+                       library_match=spec$spectral_db_matches.compound_name)
+kable(list_spec) # , table.attr = "style = \"color: white;\""
+```
+
+Based on the table, select which rows of the table above should be removed:
+
+```{r}
+wrong_specmatch <- c("")
+# remove them from the matched table
+x$removed[which(rownames(x) %in% wrong_specmatch)] <- "wrong MS2 library match"
+```
+
+Based on the previous steps, the final annotations should be reliable for futher evaluations.
+
+Add final annotations to variable metadata:
+```{r}
+x <- x[which(x$removed=="NO"), c(1,46:66)]
+mzmine_variablemetadata_x <- right_join(mzmine_variablemetadata, x, by="id")
+```
+
+######################################################################
+Filter for compounds that are actually found in the samples:
+
+```{r}
+mzmine_height_urine <- mzmine_height[,grep(samplepattern, colnames(mzmine_height))]
+mzmine_height_urine_target <- mzmine_height_urine[which(rownames(mzmine_height_urine) %in% mzmine_variablemetadata_x$id),]
+notfound <- which(apply(mzmine_height_urine_target,1,function(x)all(is.na(x))))
+mzmine_height_urine_target <- mzmine_height_urine_target[-notfound,]
+mzmine_variablemetadata_x <- mzmine_variablemetadata_x[-notfound,]
+# add metadata, like DR, min median max
+mzmine_variablemetadata_x$DR_urine <- rowSums(!is.na(mzmine_height_urine_target))
+mzmine_variablemetadata_x$min_urine <- apply(mzmine_height_urine_target, 1, function(x)min(x, na.rm=T))
+mzmine_variablemetadata_x$median_urine <- apply(mzmine_height_urine_target, 1, function(x)median(x, na.rm=T))
+mzmine_variablemetadata_x$max_urine <- apply(mzmine_height_urine_target, 1, function(x)max(x, na.rm=T))
+```
+
+######################################################################
+
+# Isotope annotation
+
+Look how isotope pattern fits for annotations. For each annotation, calculate the isotope pattern from formula. Extract the correlating MS1 cluster and see how many isotopes are among them. The molecular formulas for the annotations are revealed from the suspect list used for annotation.
+```{r}
+# reveal isotopes from the iso package
+data(iso_list)
+pattern <- list()
+for(i in 1:nrow(mzmine_variablemetadata_x)){
+    if(!is.na(mzmine_variablemetadata_x$target_Formula[i])){
+        # transform formula that it will be read in by isopat
+        y <- countElements(mzmine_variablemetadata_x$target_Formula[i])[[1]]
+        x <- ""
+        for(l in 1:length(y)){
+            x <- paste0(x, names(y)[l], y[l])
+        } 
+        pattern[[i]] <- isopattern(iso_list,x,1)
+    }else{
+        pattern[[i]] <- ""
+    }
+}
+```
+
+Check for isotopes with an specific abundance, if the isotope is present within a RT window:
+```{r}
+# generate a list with the masses of the isotopes
+iso_control <- list()
+for(i in 1:nrow(mzmine_variablemetadata_x)){
+    if(is.matrix(pattern[[i]])){
+        if(sum(pattern[[i]][,2]>iso_threshold)>1){
+            pp <- pattern[[i]][which(pattern[[i]][,2]>iso_threshold),]
+            iso <- pp[which(pp[,3]!=0),1]
+            if(length(iso>=1)){
+                # calculate adduct for iso
+                if(mode =="pos"){
+                iso <- iso +1.00786    
+                }
+                if(mode=="neg"){
+                iso <- iso - 1.00786       
+                }
+                #search for isotope within RT window
+                iso_query <- data.frame(mz=iso, 
+                                        rt= rep(mzmine_variablemetadata_x[i,3],length(iso)))
+                param <- MzRtParam(ppm = ppm_tolerance, toleranceRt = rt_tolerance)
+                pks_match <- matchValues(query=iso_query, 
+                                         target=mzmine_variablemetadata,
+                                         param = param,
+                                         mzColname = c("mz", "mz"),
+                                         rtColname = c("rt", "rt"))
+                iso_control[[i]] <- data.frame(matchedData(pks_match[whichQuery(pks_match)]))
+            }
+        }else{
+           iso_control[[i]] <- "no Isotope over threshold" 
+        }
+    }else{iso_control[[i]] <- "no Compound formula given"}
+}
+```
+
+We now plot the monoisotopic peak used for annotation against other peaks of the isotope pattern. We expect a linear correlation over the dataset. In case of low signal peaks, a drop of the second peak can appear, as these can be below the limit of detection.
+
+```{r}
+# For all entries with a isotope detected, plot correlation
+for(i in 1:length(iso_control)){
+    if(is.data.frame(iso_control[[i]])){
+        if(nrow(iso_control[[i]]>0)){
+            if(nrow(iso_control[[i]])>1){
+                message("more than one isotope found")
+                for(n in 1:nrow(iso_control[[i]])){
+                    iso_id <- iso_control[[i]]$target_id[n]
+                    y <- as.vector(t(mzmine_height[which(rownames(mzmine_height)==iso_id),]))
+                    y[is.na(y)] <- 0
+                    if(!all(is.na(y))){
+                    # get id of parent
+                    parent_id <- mzmine_variablemetadata_x[i,1]
+                    x <- as.vector(t(mzmine_height[which(rownames(mzmine_height)==parent_id),]))
+                    x[is.na(x)] <- 0
+                    # plot
+                    sampletype <- rep("black", length=ncol(mzmine_height))
+                    sampletype[grep(calibrationpattern, colnames(mzmine_height))] <- "red"
+                    sampletype[grep(qcpattern, colnames(mzmine_height))] <- "green"
+                    sampletype[grep(blankpattern, colnames(mzmine_height))] <- "blue"
+                    p <- plot(y ~ x, col=sampletype, 
+                              xlab=paste("Intensity(m/z:",mzmine_variablemetadata_x$mz[i], ")"), 
+                              ylab=paste("Intensity(m/z:",iso_control[[i]]$target_mz[n], ")")) 
+                    title(mzmine_variablemetadata_x$target_name[i])
+                    legend("topleft", legend=c("Calibration", "QC spiked", "Blank"),
+                    col=c("red", "green", "blue"), lty=1,cex=0.8)
+                    print(p)
+                    }
+                }
+            }else{
+                message("one isotope found")
+                iso_id <- iso_control[[i]]$target_id
+                y <- as.vector(t(mzmine_height[which(rownames(mzmine_height)==iso_id),]))
+                y[is.na(y)] <- 1
+                if(!all(is.na(y))){
+                    # get id of parent
+                    parent_id <- mzmine_variablemetadata_x[i,1]
+                    x <- as.vector(t(mzmine_height[which(rownames(mzmine_height)==parent_id),]))
+                    x[is.na(x)] <- 1
+                    # plot
+                    sampletype <- rep("black", length=ncol(mzmine_height))
+                    sampletype[grep(calibrationpattern, colnames(mzmine_height))] <- "red"
+                    sampletype[grep(qcpattern, colnames(mzmine_height))] <- "green"
+                    sampletype[grep(blankpattern, colnames(mzmine_height))] <- "blue"
+                    p <- plot(y ~ x, col=sampletype, 
+                              xlab=paste("Intensity(m/z:",mzmine_variablemetadata_x$mz[i], ")"), 
+                              ylab=paste("Intensity(m/z:",iso_control[[i]]$target_mz, ")")) 
+                    title(mzmine_variablemetadata_x$target_name[i])
+                    legend("topleft", legend=c("Calibration", "QC spiked", "Blank"),
+                    col=c("red", "green", "blue"), lty=1,cex=0.8)
+                    print(p)
+                    }
+            }
+        }
+    }
+}
+```
+
+Based on the plots above we can remove the annotations by annotation name
+```{r}
+#wrong_pattern <- c("")
+#wp_no <- which(mzmine_variablemetadata_x$target_name %in% wrong_pattern)
+# remove annotations based on missing isotope pattern
+#mzmine_variablemetadata_x <- mzmine_variablemetadata_x[-wp_no,]
+#mzmine_height_urine_target <- mzmine_height_urine_target[-wp_no,]
+```
+
+#######################
+
+Search and annotate glucuronides. Define variables for glucuronide search.
+```{r}
+rt_tolerance_glucuronide <- 2.5 # rt tolerance for the glucuronide annotation. should be larger based on the inaccuracy of the in silico annotation
+spearman_threshold <- 0.5 # which spearman rank threshold between glucuronide and aglycone should be used to keep a glucuronide annotation
+```
+
+
+```{r}
+suspect_gluc <- suspect
+suspect_gluc$mz <- suspect$mz + 176.0321
+
+# We expect a linear shift between glucuronide and aglycon. This formula is depending on your chromatography system. Therefore change based on your obervation of glucuronide standards on your system. 
+suspect_gluc$rt <- -0.901 + 0.991 * suspect$rt
+
+pks_match <- matchValues(query=mzmine_variablemetadata,
+                     target=suspect_gluc, 
+                     param = MzRtParam(ppm = ppm_tolerance, toleranceRt = rt_tolerance_glucuronide),
+                     mzColname = c("mz", "mz"),
+                     rtColname = c("rt", "rt"))
+pks_query <- pks_match[whichQuery(pks_match)]
+x <- data.frame(matchedData(pks_query))
+# aglycone found
+x <- x[which(x$target_name %in% mzmine_variablemetadata_x$target_name) , ]
+# calculate spearman rank correlation with aglycone
+x$gluc_correlation <- NA
+for(i in 1:nrow(x)){
+    gluc_id <- x$id[i]
+    p_id    <- mzmine_variablemetadata_x$id[which(mzmine_variablemetadata_x$target_name==x$target_name[i])]
+    xx1 <- data.frame(gluc=as.vector(t(mzmine_height_urine[rownames(mzmine_height_urine)==gluc_id,])),
+                     aglycone=as.vector(t(mzmine_height_urine[rownames(mzmine_height_urine)==p_id,])))
+    xx <- xx1[complete.cases(xx1),]
+    if(nrow(xx)>2){
+        x$gluc_correlation[i] <- cor.test(xx[,1], xx[,2], method = 'spearman')$estimate
+        x$gluc_pvalue[i] <- cor.test(xx[,1], xx[,2], method = 'spearman')$p.value
+        x$gluc_overlap[i] <- nrow(xx)
+        x$DR_urine[i] <- sum(!is.na(xx1$gluc))
+        x$min_urine[i] <- min(xx1$gluc, na.rm=T)
+        x$median_urine[i] <- median(xx1$gluc, na.rm=T)
+        x$max_urine[i] <- max(xx1$gluc, na.rm=T)
+        if(x$gluc_correlation[i] > 0.5){
+            p <- plot(xx[,1]~xx[,2], 
+            xlab="Intensity aglycone",
+            ylab="Intensity glucuronide")
+            title(paste0(x$target_name[i]))
+            mtext(paste0(" Gluc:", sum(!is.na(xx1$gluc)), " Aglyc:",sum(!is.na(xx1$aglycone)), " Overlap:", nrow(xx), " roh: ", x$gluc_correlation[i]), side=3)
+            print(p)
+        }
+    }
+}
+```
+
+
+```{r}
+x_cor <- x[which(x$gluc_correlation > spearman_threshold),]
+list_cor <- data.frame(rownames(x_cor), x_cor$target_name, x_cor$gluc_correlation, x_cor$gluc_pvalue, x_cor$gluc_overlap)
+list_cor <- list_cor[order(list_cor$x_cor.target_name),]
+kable(list_cor)
+```
+
+Based on the list again, select the features, that you do not want to keep as glucuronide annotation:
+
+```{r}
+remove_gluc <- c("13144", "6703", "27405") 
+```
+
+Add the glucuronides to the previous annotations:
+
+```{r}
+x_cor <- x_cor[-which(rownames(x_cor) %in% remove_gluc),]
+x_cor$target_name <- paste0(x_cor$target_name, "_glucuronide")
+# add to full list
+variables <- full_join(mzmine_variablemetadata_x, x_cor)
+# add height data to table
+gluc_height <- mzmine_height[which(rownames(mzmine_height) %in%x_cor$id),]
+mzmine_height_target <- mzmine_height[which(rownames(mzmine_height) %in% mzmine_variablemetadata_x$id),]
+height  <- rbind(mzmine_height_target, gluc_height)
+```
+
+# Perform blank correction on peaklist
+
+```{r}
+blank <- height[,grep(blankpattern,colnames(height))]
+mean_blank <- apply(blank,1, function(x)mean(x,na.rm=T))
+mean_blank[is.na(mean_blank)] <- 0
+
+others <- height[,grep(samplepattern,colnames(height))]
+mean_others <- apply(others,1, function(x)mean(x,na.rm=T))
+
+blank_keep <- which(mean_others > blank_removal_threshold * mean_blank)
+
+height <- height[blank_keep,]
+variables <- variables[blank_keep,]
+```
+
+#######################
+# Save neg mode result to combine with pos mode for further analysis
+```{r}
+fwrite(height, file=height_output)
+fwrite(variables, file=variable_output)
+```
+#######################
