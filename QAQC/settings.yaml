@@ -1,0 +1,10 @@
+mode:	auto # Ion mode of the analysis will be chosen by first file, or "Pos" or "Neg" if defining polarity
+listname:	"./exampleIS.csv" # Filename inside this folder containing the mz and RT values to search for
+rt_var:	0.5 # Rt variation in minutes
+ppm:	8 # Mass window to use for annotation
+colorcode:	FALSE # Shall samples be used in groups and colored_
+Samplegroupfile:	"" #Filename containing samplename and color
+Samplepattern: "" # Define which samples should be used, if you want to subset the samples, if empty all samples will be used
+msconvertpath:	"C:/Users/Exploris/Desktop/ProteoWizard/msconvert.exe" #Filepath to msconvert.exe
+last_file:	FALSE #Shall the last file be used in analysis? Use this in case the QEx is still running.
+cores: 2 #cores to use for parallel processing
