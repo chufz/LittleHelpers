@@ -10,14 +10,12 @@ Before first use, these following packages should be installed:
 install.packages("shiny")
 install.packages("plotly")
 install.packages("scales")
-<<<<<<< HEAD
 
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 
 BiocManager::install("MsCoreUtils")
 =======
->>>>>>> a91df2be98a6b7b8b8d2b1c3b27b86fdc461973a
 ```
 
 The Skript can be downloaded either via the command `git pull git@github.com:chufz/LittleHelpers.git` or as zip file over the link https://github.com/chufz/LittleHelpers/archive/refs/heads/main.zip
